@@ -287,24 +287,3 @@ const removeInvisibility = (node) => {
         node.attributes.removeNamedItem('class')
     }
 }
-
-const nodeStrRepresentation = (node) => {
-    let attribStr = '';
-    for (let aIdx = 0; aIdx < node.attributes.length; aIdx++) {
-        const attr = node.attributes[aIdx];
-        attribStr += ` ${attr.name}="${attr.value}"`;
-    }
-
-    let contentStr = '';
-    node.childNodes.forEach(n => {
-        if (n.nodeType !== 3) {
-            return;
-        }
-        contentStr += n.textContent.trim();
-    })
-    if (contentStr) {
-        contentStr = ` "${contentStr}"`;
-    }
-
-    return `${node.nodeName}${attribStr}${contentStr}`;
-}
