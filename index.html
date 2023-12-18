@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>app</title>
+        <link rel="stylesheet" href="style.css">
+        <script src="live-tmpl.js"></script>
+    </head>
+    <body>
+        <div id="app" class="invisible">
+            <p>text rendering: {{str}}</p>
+
+            <button onclick="toggleBool()">toggle bools</button>
+            <p>conditional rendering: <span tpl-if="bool">i am invisible</span></p>
+            <p>conditional rendering: <span tpl-if="!bool">i am visible</span></p>
+
+            <p>nested loop with following array: {{obj.nestedArr}}</p>
+            <ul>
+                <li tpl-for="obj.nestedArr; x">
+                    {{x}}
+                    <ul>
+                        <li tpl-for="x; y">
+                            {{y}}
+                        </li>
+                    </ul>
+                </li>
+            </ul>
+
+            <p>loop with following array: {{obj.arr}}</p>
+            <button onclick="addClick()">add</button>
+            <button onclick="modClick()">modify</button>
+            <button onclick="delClick()">remove</button>
+            <ul>
+                <li tpl-for="obj.arr; x">
+                    {{x}}
+                </li>
+            </ul>
+        </div>
+
+        <script src="script.js"></script>
+    </body>
+</html>
