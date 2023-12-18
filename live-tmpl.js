@@ -18,7 +18,7 @@ const renderTemplate = (ctx) => {
         const substituteByDataDict = (dataDict, txt) => {
             for (let key of Object.keys(dataDict)) {
                 const re = new RegExp(`(^|[^\.\\_a-zA-Z0-9])(${key})($|[^\\_a-zA-Z0-9])`, 'g');
-                const val = JSON.stringify(dataDict[key]).replaceAll('"', '\'');
+                const val = JSON.stringify(dataDict[key]).replaceAll('\'', '\\\'').replaceAll('"', '\'');
                 txt = txt.replaceAll(re, `$1${val}$3`);
             }
             return txt;
@@ -40,7 +40,7 @@ const renderTemplate = (ctx) => {
             const processedExpr = substituteDataReferences(matchedExpr);
             txt = txt.slice(0, match.index + 2) + processedExpr + txt.slice(match.index + 2 + matchedExpr.length);
             try {
-                let evaledExpr = eval('(' + processedExpr.replaceAll('\'', '"') + ')');
+                let evaledExpr = eval('(' + processedExpr + ')');
                 if (typeof evaledExpr == 'object') {
                     evaledExpr = JSON.stringify(evaledExpr).replaceAll('"', '\'');
                 }
@@ -59,7 +59,7 @@ const renderTemplate = (ctx) => {
             const processedExpr = substituteDataReferences(matchedExpr);
             txt = txt.slice(0, match.index + 9) + processedExpr + txt.slice(match.index + 9 + matchedExpr.length);
             try {
-                let evaledExpr = eval('(' + processedExpr.replaceAll('\'', '"') + ')');
+                let evaledExpr = eval('(' + processedExpr + ')');
                 if (typeof evaledExpr == 'object') {
                     evaledExpr = JSON.stringify(evaledExpr).replaceAll('"', '\'');
                 }
@@ -100,7 +100,7 @@ const renderTemplate = (ctx) => {
         try {
             const forValues = namedItem.value.split(";");
             const forArrName = forValues[0].trim();
-            const forArr = eval('(' + substituteDataReferences(forArrName).replaceAll('\'', '"') + ')');
+            const forArr = eval('(' + substituteDataReferences(forArrName).replaceAll(/([^\\])'/g, '$1"') + ')');
             const forVar = forValues[1].trim();
             node.attributes.removeNamedItem(tplFor);
             const tpl = node.outerHTML;
