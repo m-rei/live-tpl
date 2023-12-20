@@ -13,10 +13,12 @@ const initTemplate = (rootNodeSelector, data) => {
 }
 
 const renderTemplate = (ctx) => {
+    const TPL_FOR = 'tpl-for';
+    const TPL_IF = 'tpl-if';
 
-    const substituteVarReferences = (txt) => {
-        const findByVarObj = (obj, tokens) => {
-            let ret = obj;
+    const resolveVarRefs = (txt) => {
+        const tryToResolveVarRef = (varContainer, tokens) => {
+            let ret = varContainer;
             let idx = 0;
             while (idx < tokens.length) {
                 const nextToken = tokens[idx];
@@ -27,7 +29,7 @@ const renderTemplate = (ctx) => {
                     break;
                 }
             }
-            if (ret === obj) {
+            if (ret === varContainer) {
                 ret = undefined;
             }
             return {
@@ -48,30 +50,30 @@ const renderTemplate = (ctx) => {
         }
 
         const re = /[a-zA-Z_$][a-zA-Z$0-9_.-]*/g;
-        const dataReferences = [...txtStringsReplacedWithWhiteSpaces.matchAll(re)];
-        for (let i = 0; i < dataReferences.length; i++) {
-            let dataReference = dataReferences[i];
-            let dataTokens = dataReference[0].split('.');
+        const varRefs = [...txtStringsReplacedWithWhiteSpaces.matchAll(re)];
+        for (let i = 0; i < varRefs.length; i++) {
+            let varRef = varRefs[i];
+            let varTokens = varRef[0].split('.');
 
             let val = undefined;
             for (let j = ctx.localDataStack.length-1; j >= 0 && val?.ret === undefined; j--) {
-                val = findByVarObj(ctx.localDataStack[j], dataTokens);
+                val = tryToResolveVarRef(ctx.localDataStack[j], varTokens);
             }
             if (val?.ret === undefined) {
-                val = findByVarObj(ctx.data, dataTokens);
+                val = tryToResolveVarRef(ctx.data, varTokens);
             }
 
             if (val?.ret !== undefined) {
                 let len = 0;
                 for (let j = 0; j < val.tokens; j++) {
-                    len += 1 + dataTokens[j].length;
+                    len += 1 + varTokens[j].length;
                 }
                 len--;
 
                 txt = 
-                    txt.substring(0, dataReference.index) +
+                    txt.substring(0, varRef.index) +
                     JSON.stringify(val.ret) + 
-                    txt.substring(dataReference.index + len);
+                    txt.substring(varRef.index + len);
             }
         }
 
@@ -88,7 +90,7 @@ const renderTemplate = (ctx) => {
             if (matchedExpr.startsWith('##')) {
                 matchedExpr = atob(matchedExpr.substring(2));
             }
-            const processedExpr = substituteVarReferences(matchedExpr);
+            const processedExpr = resolveVarRefs(matchedExpr);
             try {
                 let evaledExpr = eval('(' + processedExpr + ')');
                 if (typeof evaledExpr == 'object') {
@@ -103,37 +105,36 @@ const renderTemplate = (ctx) => {
     }
 
     const evalTplDirectives = (txt) => {
-        const tplForRegEx = /tpl-for="([^;]*)/g; 
+        const tplForRegEx = new RegExp(`${TPL_FOR}="([^;]*)`, 'g');
         const matches = [...txt.matchAll(tplForRegEx)];
         for (let i = matches.length-1; i >= 0; i--) {
             const match = matches[i];
             let matchedExpr = match[1];
-            const processedExpr = '##' + btoa(substituteVarReferences(matchedExpr));
-            txt = txt.slice(0, match.index + 9) + processedExpr + txt.slice(match.index + 9 + matchedExpr.length);
+            const processedExpr = '##' + btoa(resolveVarRefs(matchedExpr));
+            txt = txt.slice(0, match.index + 2 + TPL_FOR.length) + processedExpr + txt.slice(match.index + 2 + TPL_FOR.length + matchedExpr.length);
         }
 
-        const tplIfRegEx = /tpl-if="([^"]*)/g; 
+        const tplIfRegEx = new RegExp(`${TPL_IF}="([^"]*)`, 'g'); 
         const matches2 = [...txt.matchAll(tplIfRegEx)];
         for (let i = matches2.length-1; i >= 0; i--) {
             const match = matches2[i];
             let matchedExpr = match[1];
-            const processedExpr = substituteVarReferences(matchedExpr);
-            txt = txt.slice(0, match.index + 8) + processedExpr + txt.slice(match.index + 8 + matchedExpr.length);
+            const processedExpr = resolveVarRefs(matchedExpr);
+            txt = txt.slice(0, match.index + 2 + TPL_IF.length) + processedExpr + txt.slice(match.index + 2 + TPL_IF.length + matchedExpr.length);
         }
 
         return txt;
     }
 
     const handleTplIf = (node) => {
-        const tplIf = 'tpl-if';
-        const namedItem = node.attributes.getNamedItem(tplIf);
+        const namedItem = node.attributes.getNamedItem(TPL_IF);
         if (!namedItem) {
             return {};
         }
         try {
-            const val = substituteVarReferences(namedItem.value);
+            const val = resolveVarRefs(namedItem.value);
             const evalResult = eval(val);
-            node.attributes.removeNamedItem('tpl-if');
+            node.attributes.removeNamedItem(TPL_IF);
             if (evalResult == false) {
                 node.parentNode.removeChild(node);
                 return {
@@ -141,14 +142,13 @@ const renderTemplate = (ctx) => {
                 }
             }
         } catch (e) {
-            console.warn(`[tpl-if] could not parse: ${namedItem.value}`);
+            console.warn(`[${TPL_IF}] could not parse: ${namedItem.value}`);
         }
         return {};
     } 
 
     const handleTplFor = (node) => {
-        const tplFor = 'tpl-for';
-        const namedItem = node.attributes.getNamedItem(tplFor);
+        const namedItem = node.attributes.getNamedItem(TPL_FOR);
         if (!namedItem) {
             return {};
         }
@@ -158,9 +158,9 @@ const renderTemplate = (ctx) => {
             if (forArrName.startsWith('##')) {
                 forArrName = atob(forArrName.substring(2));
             }
-            const forArr = JSON.parse(substituteVarReferences(forArrName));
+            const forArr = JSON.parse(resolveVarRefs(forArrName));
             const forVar = forValues[1].trim();
-            node.attributes.removeNamedItem(tplFor);
+            node.attributes.removeNamedItem(TPL_FOR);
             const tpl = node.outerHTML;
             
             for (let forVal of forArr) {
@@ -179,7 +179,7 @@ const renderTemplate = (ctx) => {
                 nodeRemoved: true,
             }
         } catch (e) {
-            console.warn(`[tpl-for] could not parse: ${namedItem.value}`);
+            console.warn(`[${TPL_FOR}] could not parse: ${namedItem.value}`);
         }
         return {};
     }
