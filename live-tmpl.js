@@ -36,25 +36,25 @@ const renderTemplate = (ctx) => {
                 txtStringsReplacedWithWhiteSpaces.substring(match.index + match[0].length);
         }
 
-        const re = /(^|[ \[])([a-zA-Z_$][a-zA-Z0-9_.-]+)/g;
+        const re = /[a-zA-Z_$][a-zA-Z0-9_.-]*/g;
         const dataReferences = [...txtStringsReplacedWithWhiteSpaces.matchAll(re)];
         for (let i = 0; i < dataReferences.length; i++) {
             let dataReference = dataReferences[i];
-            let dataTokens = dataReference[2].split('.');
+            let dataTokens = dataReference[0].split('.');
 
-            let val = null;
-            for (let j = ctx.localDataStack.length-1; j >= 0 && !val; j--) {
+            let val = undefined;
+            for (let j = ctx.localDataStack.length-1; j >= 0 && val === undefined; j--) {
                 val = findByVarObj(ctx.localDataStack[j], dataTokens);
             }
-            if (!val) {
+            if (val === undefined) {
                 val = findByVarObj(ctx.data, dataTokens);
             }
 
-            if (val) {
+            if (val !== undefined) {
                 txt = 
-                    txt.substring(0, dataReference.index + dataReference[1].length) +
+                    txt.substring(0, dataReference.index) +
                     JSON.stringify(val)
-                    txt.substring(dataReference.index + dataReference[1].length + dataReference[1].length)
+                    txt.substring(dataReference.index + dataReference[0].length)
             }
         }
 
