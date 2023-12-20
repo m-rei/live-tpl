@@ -14,21 +14,51 @@ const initTemplate = (rootNodeSelector, data) => {
 
 const renderTemplate = (ctx) => {
 
-    const substituteDataReferences = (txt) => {
-        const substituteByDataDict = (dataDict, txt) => {
-            for (let key of Object.keys(dataDict)) {
-                const re = new RegExp(`(^|[^\.\\_a-zA-Z0-9])(${key})($|[^\\_a-zA-Z0-9])`, 'g');
-                const val = JSON.stringify(dataDict[key]).replaceAll('\'', '\\\'').replaceAll('"', '\'');
-                txt = txt.replaceAll(re, `$1${val}$3`);
+    const substituteVarReferences = (txt) => {
+        const findByVarObj = (obj, tokens) => {
+            let ret = obj;
+            for (let i = 0;
+                i < tokens.length && ret;
+                i++) {
+                ret = ret[tokens[i]];
             }
-            return txt;
+            return ret;
         }
 
-        for (let i = ctx.localDataStack.length-1; i >= 0; i--) {
-            txt = substituteByDataDict(ctx.localDataStack[i], txt);
+        let txtStringsReplacedWithWhiteSpaces = txt;
+        const strRE = /(?:"[^"]*"|'[^']*')/g;
+        const strMatches = [...txtStringsReplacedWithWhiteSpaces.matchAll(strRE)];
+        for (let i = 0; i < strMatches.length; i++) {
+            const match = strMatches[i];
+            txtStringsReplacedWithWhiteSpaces = 
+                txtStringsReplacedWithWhiteSpaces.substring(0, match.index) +
+                ' '.repeat(match[0].length) +
+                txtStringsReplacedWithWhiteSpaces.substring(match.index + match[0].length);
         }
-        
-        return substituteByDataDict(ctx.data, txt);
+
+        const re = /(^|[ \[])([a-zA-Z_$][a-zA-Z0-9_.-]+)/g;
+        const dataReferences = [...txtStringsReplacedWithWhiteSpaces.matchAll(re)];
+        for (let i = 0; i < dataReferences.length; i++) {
+            let dataReference = dataReferences[i];
+            let dataTokens = dataReference[2].split('.');
+
+            let val = null;
+            for (let j = ctx.localDataStack.length-1; j >= 0 && !val; j--) {
+                val = findByVarObj(ctx.localDataStack[j], dataTokens);
+            }
+            if (!val) {
+                val = findByVarObj(ctx.data, dataTokens);
+            }
+
+            if (val) {
+                txt = 
+                    txt.substring(0, dataReference.index + dataReference[1].length) +
+                    JSON.stringify(val)
+                    txt.substring(dataReference.index + dataReference[1].length + dataReference[1].length)
+            }
+        }
+
+        return txt;
     }
 
     const evalDoubleCurlyBraces = (txt) => {
@@ -37,7 +67,7 @@ const renderTemplate = (ctx) => {
         for (let i = matches.length-1; i >= 0; i--) {
             const match = matches[i];
             let matchedExpr = match[1];
-            const processedExpr = substituteDataReferences(matchedExpr);
+            const processedExpr = substituteVarReferences(matchedExpr);
             txt = txt.slice(0, match.index + 2) + processedExpr + txt.slice(match.index + 2 + matchedExpr.length);
             try {
                 let evaledExpr = eval('(' + processedExpr + ')');
@@ -56,7 +86,7 @@ const renderTemplate = (ctx) => {
         for (let i = matches.length-1; i >= 0; i--) {
             const match = matches[i];
             let matchedExpr = match[1];
-            const processedExpr = substituteDataReferences(matchedExpr);
+            const processedExpr = substituteVarReferences(matchedExpr);
             txt = txt.slice(0, match.index + 9) + processedExpr + txt.slice(match.index + 9 + matchedExpr.length);
             try {
                 let evaledExpr = eval('(' + processedExpr + ')');
@@ -76,7 +106,7 @@ const renderTemplate = (ctx) => {
             return {};
         }
         try {
-            const val = substituteDataReferences(namedItem.value);
+            const val = substituteVarReferences(namedItem.value);
             const evalResult = eval(val);
             node.attributes.removeNamedItem('tpl-if');
             if (evalResult == false) {
@@ -100,7 +130,7 @@ const renderTemplate = (ctx) => {
         try {
             const forValues = namedItem.value.split(";");
             const forArrName = forValues[0].trim();
-            const forArr = eval('(' + substituteDataReferences(forArrName).replaceAll(/([^\\])'/g, '$1"') + ')');
+            const forArr = eval('(' + substituteVarReferences(forArrName).replaceAll(/([^\\])'/g, '$1"') + ')');
             const forVar = forValues[1].trim();
             node.attributes.removeNamedItem(tplFor);
             const tpl = node.outerHTML;
