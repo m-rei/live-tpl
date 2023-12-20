@@ -20,7 +20,6 @@ const renderTemplate = (ctx) => {
             let idx = 0;
             while (idx < tokens.length) {
                 const nextToken = tokens[idx];
-                // todo -> array handling?
                 if (['string','number','boolean','array','object'].includes(typeof ret[nextToken])) {
                     ret = ret[nextToken];
                     idx++
