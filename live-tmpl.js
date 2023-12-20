@@ -17,12 +17,24 @@ const renderTemplate = (ctx) => {
     const substituteVarReferences = (txt) => {
         const findByVarObj = (obj, tokens) => {
             let ret = obj;
-            for (let i = 0;
-                i < tokens.length && ret;
-                i++) {
-                ret = ret[tokens[i]];
+            let idx = 0;
+            while (idx < tokens.length) {
+                const nextToken = tokens[idx];
+                // todo -> array handling?
+                if (['string','number','boolean','array','object'].includes(typeof ret[nextToken])) {
+                    ret = ret[nextToken];
+                    idx++
+                } else {
+                    break;
+                }
             }
-            return ret;
+            if (ret === obj) {
+                ret = undefined;
+            }
+            return {
+                ret: ret,
+                tokens: idx,
+            }
         }
 
         let txtStringsReplacedWithWhiteSpaces = txt;
@@ -36,25 +48,31 @@ const renderTemplate = (ctx) => {
                 txtStringsReplacedWithWhiteSpaces.substring(match.index + match[0].length);
         }
 
-        const re = /[a-zA-Z_$][a-zA-Z0-9_.-]*/g;
+        const re = /[a-zA-Z_$][a-zA-Z$0-9_.-]*/g;
         const dataReferences = [...txtStringsReplacedWithWhiteSpaces.matchAll(re)];
         for (let i = 0; i < dataReferences.length; i++) {
             let dataReference = dataReferences[i];
             let dataTokens = dataReference[0].split('.');
 
             let val = undefined;
-            for (let j = ctx.localDataStack.length-1; j >= 0 && val === undefined; j--) {
+            for (let j = ctx.localDataStack.length-1; j >= 0 && val?.ret === undefined; j--) {
                 val = findByVarObj(ctx.localDataStack[j], dataTokens);
             }
-            if (val === undefined) {
+            if (val?.ret === undefined) {
                 val = findByVarObj(ctx.data, dataTokens);
             }
 
-            if (val !== undefined) {
+            if (val?.ret !== undefined) {
+                let len = 0;
+                for (let j = 0; j < val.tokens; j++) {
+                    len += 1 + dataTokens[j].length;
+                }
+                len--;
+
                 txt = 
                     txt.substring(0, dataReference.index) +
-                    JSON.stringify(val)
-                    txt.substring(dataReference.index + dataReference[0].length)
+                    JSON.stringify(val.ret) + 
+                    txt.substring(dataReference.index + len);
             }
         }
 
@@ -67,35 +85,43 @@ const renderTemplate = (ctx) => {
         for (let i = matches.length-1; i >= 0; i--) {
             const match = matches[i];
             let matchedExpr = match[1];
+            let matchedExprLen = matchedExpr.length;
+            if (matchedExpr.startsWith('##')) {
+                matchedExpr = atob(matchedExpr.substring(2));
+            }
             const processedExpr = substituteVarReferences(matchedExpr);
-            txt = txt.slice(0, match.index + 2) + processedExpr + txt.slice(match.index + 2 + matchedExpr.length);
             try {
                 let evaledExpr = eval('(' + processedExpr + ')');
                 if (typeof evaledExpr == 'object') {
-                    evaledExpr = JSON.stringify(evaledExpr).replaceAll('"', '\'');
+                    evaledExpr = JSON.stringify(evaledExpr);
                 }
-                txt = txt.slice(0, match.index) + evaledExpr + txt.slice(match.index + 4 + processedExpr.length);
-            } catch (ignored) { }
+                txt = txt.slice(0, match.index) + evaledExpr + txt.slice(match.index + 4 + matchedExprLen);
+            } catch (ignored) {
+                txt = txt.slice(0, match.index + 2) + '##' + btoa(processedExpr) + txt.slice(match.index + 2 + matchedExprLen);
+            }
         }
         return txt;
     }
 
-    const evalTplForArr = (txt) => {
+    const evalTplDirectives = (txt) => {
         const tplForRegEx = /tpl-for="([^;]*)/g; 
         const matches = [...txt.matchAll(tplForRegEx)];
         for (let i = matches.length-1; i >= 0; i--) {
             const match = matches[i];
             let matchedExpr = match[1];
-            const processedExpr = substituteVarReferences(matchedExpr);
+            const processedExpr = '##' + btoa(substituteVarReferences(matchedExpr));
             txt = txt.slice(0, match.index + 9) + processedExpr + txt.slice(match.index + 9 + matchedExpr.length);
-            try {
-                let evaledExpr = eval('(' + processedExpr + ')');
-                if (typeof evaledExpr == 'object') {
-                    evaledExpr = JSON.stringify(evaledExpr).replaceAll('"', '\'');
-                }
-                txt = txt.slice(0, match.index + 9) + evaledExpr + txt.slice(match.index + 9 + processedExpr.length);
-            } catch (ignored) { }
         }
+
+        const tplIfRegEx = /tpl-if="([^"]*)/g; 
+        const matches2 = [...txt.matchAll(tplIfRegEx)];
+        for (let i = matches2.length-1; i >= 0; i--) {
+            const match = matches2[i];
+            let matchedExpr = match[1];
+            const processedExpr = substituteVarReferences(matchedExpr);
+            txt = txt.slice(0, match.index + 8) + processedExpr + txt.slice(match.index + 8 + matchedExpr.length);
+        }
+
         return txt;
     }
 
@@ -129,8 +155,11 @@ const renderTemplate = (ctx) => {
         }
         try {
             const forValues = namedItem.value.split(";");
-            const forArrName = forValues[0].trim();
-            const forArr = eval('(' + substituteVarReferences(forArrName).replaceAll(/([^\\])'/g, '$1"') + ')');
+            let forArrName = forValues[0].trim();
+            if (forArrName.startsWith('##')) {
+                forArrName = atob(forArrName.substring(2));
+            }
+            const forArr = JSON.parse(substituteVarReferences(forArrName));
             const forVar = forValues[1].trim();
             node.attributes.removeNamedItem(tplFor);
             const tpl = node.outerHTML;
@@ -139,7 +168,7 @@ const renderTemplate = (ctx) => {
                 let stack = {};
                 stack[forVar] = forVal;
                 ctx.localDataStack.push(stack);
-                const processedTpl = evalTplForArr(evalDoubleCurlyBraces(tpl));
+                const processedTpl = evalTplDirectives(evalDoubleCurlyBraces(tpl));
                 ctx.localDataStack.pop();
 
                 const newNode = createVDOM(processedTpl);
