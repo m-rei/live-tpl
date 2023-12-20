@@ -1,4 +1,4 @@
-# live-tmpl
+# live-tpl
 Minimal, in-place, live html templating engine
 
 ## Keywords
