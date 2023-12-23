@@ -7,6 +7,7 @@ const initTemplate = (rootNodeSelector, data) => {
     ctx.data = data;
     ctx.localDataStack = [];
     ctx.fullRender = true;
+    ctx.changeListeners = new Map();
     renderTemplate(ctx);
 
     return ctx;
@@ -15,29 +16,30 @@ const initTemplate = (rootNodeSelector, data) => {
 const renderTemplate = (ctx) => {
     const TPL_FOR = 'tpl-for';
     const TPL_IF = 'tpl-if';
+    const TPL_MODEL = 'tpl-model';
 
-    const resolveVarRefs = (txt) => {
-        const tryToResolveVarRef = (varContainer, tokens) => {
-            let ret = varContainer;
-            let idx = 0;
-            while (idx < tokens.length) {
-                const nextToken = tokens[idx];
-                if (['string','number','boolean','array','object'].includes(typeof ret[nextToken])) {
-                    ret = ret[nextToken];
-                    idx++
-                } else {
-                    break;
-                }
-            }
-            if (ret === varContainer) {
-                ret = undefined;
-            }
-            return {
-                ret: ret,
-                tokens: idx,
+    const tryToResolveVarRef = (varContainer, tokens) => {
+        let ret = varContainer;
+        let idx = 0;
+        while (idx < tokens.length) {
+            const nextToken = tokens[idx];
+            if (['string','number','boolean','array','object'].includes(typeof ret[nextToken])) {
+                ret = ret[nextToken];
+                idx++
+            } else {
+                break;
             }
         }
+        if (ret === varContainer) {
+            ret = undefined;
+        }
+        return {
+            ret: ret,
+            tokens: idx,
+        }
+    }
 
+    const resolveVarRefs = (txt) => {
         let txtStringsReplacedWithWhiteSpaces = txt;
         const strRE = /(?:"[^"]*"|'[^']*')/g;
         const strMatches = [...txtStringsReplacedWithWhiteSpaces.matchAll(strRE)];
@@ -104,18 +106,27 @@ const renderTemplate = (ctx) => {
         return txt;
     }
 
-    const evalTplDirectives = (txt) => {
-        const tplForRegEx = new RegExp(`${TPL_FOR}="([^;]*)`, 'g');
-        const matches = [...txt.matchAll(tplForRegEx)];
+    const evalTplDirectives = (txt, parentLoopArrName, parentLoopVar, parentLoopIdx) => {
+        const tplForRE = new RegExp(`${TPL_FOR}="([^;]*);([^"]*)`, 'g');
+        const tplForArrReferencesParentLoopVarRE = new RegExp(`^${parentLoopVar}(\\.|\\[)`, 'g');
+        const matches = [...txt.matchAll(tplForRE)];
         for (let i = matches.length-1; i >= 0; i--) {
             const match = matches[i];
             let matchedExpr = match[1];
+            const referencesParentLoopVar = tplForArrReferencesParentLoopVarRE.test(matchedExpr.trim());
+            const arrNameToInsert = referencesParentLoopVar
+                ? ';##' + btoa(`${parentLoopArrName}[${parentLoopIdx}].${matchedExpr.split('.').filter((_,idx) => idx > 0).join('.')}`)
+                : ';##' + btoa(matchedExpr);
             const processedExpr = '##' + btoa(resolveVarRefs(matchedExpr));
-            txt = txt.slice(0, match.index + 2 + TPL_FOR.length) + processedExpr + txt.slice(match.index + 2 + TPL_FOR.length + matchedExpr.length);
-        }
+            txt = txt.slice(0, match.index + 2 + TPL_FOR.length) +
+                processedExpr +
+                txt.slice(match.index + 2 + TPL_FOR.length + matchedExpr.length, match.index + 2 + TPL_FOR.length + matchedExpr.length + match[2].length + 1) +
+                arrNameToInsert +
+                txt.slice(match.index + 2 + TPL_FOR.length + matchedExpr.length + match[2].length + 1);
+        } 
 
-        const tplIfRegEx = new RegExp(`${TPL_IF}="([^"]*)`, 'g'); 
-        const matches2 = [...txt.matchAll(tplIfRegEx)];
+        const tplIfRE = new RegExp(`${TPL_IF}="([^"]*)`, 'g'); 
+        const matches2 = [...txt.matchAll(tplIfRE)];
         for (let i = matches2.length-1; i >= 0; i--) {
             const match = matches2[i];
             let matchedExpr = match[1];
@@ -123,7 +134,88 @@ const renderTemplate = (ctx) => {
             txt = txt.slice(0, match.index + 2 + TPL_IF.length) + processedExpr + txt.slice(match.index + 2 + TPL_IF.length + matchedExpr.length);
         }
 
+        const tplModelRE = new RegExp(`${TPL_MODEL}="([^"]*)`, 'g');
+        const matches3 = [...txt.matchAll(tplModelRE)];
+        for (let i = matches3.length-1; i >= 0; i--) {
+            const match = matches3[i];
+            let matchedExpr = match[1];
+            if (matchedExpr.trim() == parentLoopVar) {
+                const arrNameToInsert = `${parentLoopArrName}[${parentLoopIdx}]`;
+                txt = txt.slice(0, match.index + 2 + TPL_MODEL.length) +
+                    arrNameToInsert +
+                    txt.slice(match.index + 2 + TPL_MODEL.length + matchedExpr.length);
+            }
+        }
+
         return txt;
+    }
+
+    const convert = (strValue, oldType) => {
+        if ('number' === typeof oldType) {
+            return Number(strValue);
+        }
+        if ('boolean' === typeof oldType) {
+            return strValue.toLowerCase() == 'true' || strValue == '1' || strValue == 't' || strValue === 'y';
+        }
+        return strValue;
+    }
+
+    const tplModelChangeListener = (fullVarName) => {
+        return (e) => {
+            const newVal = e?.currentTarget?.value;
+            if (!newVal) {
+                return;
+            }
+            let base = ctx.data;
+            const tokens = fullVarName.split('.');
+            let i = 0;
+            while (i < tokens.length) {
+                const currentToken = tokens[i];
+                if (currentToken.includes('[')) {
+                    const currentTokenParts = currentToken.split('[');
+                    base = base[currentTokenParts[0]];
+                    const arrIdx = parseInt(currentTokenParts[1].substring(0, currentTokenParts[1].length - 1));
+                    if (arrIdx == NaN) {
+                        return;
+                    }
+                    if (i == tokens.length - 1) {
+                        base[arrIdx] = convert(newVal, base[arrIdx]);
+                        break;
+                    }
+                    base = base[arrIdx];
+                } else {
+                    if (i == tokens.length -1) {
+                        base[currentToken] = convert(newVal, base[currentToken]);
+                        break;
+                    }
+                    base = base[currentToken];
+                }
+                i++;
+            }
+            renderTemplate(ctx);
+        }
+    }
+
+    const handleTplModel = (node) => {
+        const namedItem = node.attributes.getNamedItem(TPL_MODEL);
+        if (!namedItem) {
+            return {};
+        }
+        try {
+            const fullVarName = namedItem.value;
+            node.attributes.removeNamedItem(TPL_MODEL);
+            let changeListener = ctx.changeListeners.get(fullVarName);
+            if (!changeListener) {
+                changeListener = tplModelChangeListener(fullVarName);
+                ctx.changeListeners.set(fullVarName, changeListener);
+            }
+            node.removeEventListener('change', changeListener);
+            node.addEventListener('change', changeListener);
+            node.value = eval(resolveVarRefs(fullVarName));
+        } catch (e) {
+            console.warn(`[${TPL_MODEL}] could not parse: ${namedItem.value}`);
+        }
+        return {}
     }
 
     const handleTplIf = (node) => {
@@ -148,12 +240,12 @@ const renderTemplate = (ctx) => {
     } 
 
     const handleTplFor = (node) => {
-        const namedItem = node.attributes.getNamedItem(TPL_FOR);
-        if (!namedItem) {
+        const tplForAttrib = node.attributes.getNamedItem(TPL_FOR);
+        if (!tplForAttrib) {
             return {};
         }
         try {
-            const forValues = namedItem.value.split(";");
+            const forValues = tplForAttrib.value.split(";");
             let forArrName = forValues[0].trim();
             if (forArrName.startsWith('##')) {
                 forArrName = atob(forArrName.substring(2));
@@ -162,15 +254,19 @@ const renderTemplate = (ctx) => {
             const forVar = forValues[1].trim();
             node.attributes.removeNamedItem(TPL_FOR);
             const tpl = node.outerHTML;
-            
-            for (let forVal of forArr) {
+            const currentArrName = forValues.length >= 3
+                ? atob(forValues[2].substring(2))
+                : forArrName;
+
+            for (let idx = 0; idx < forArr.length; idx++) {
+                let forVal = forArr[idx];
                 let stack = {};
                 stack[forVar] = forVal;
                 ctx.localDataStack.push(stack);
-                const processedTpl = evalTplDirectives(evalDoubleCurlyBraces(tpl));
+                const processedTpl = evalTplDirectives(evalDoubleCurlyBraces(tpl), currentArrName, forVar, idx);
                 ctx.localDataStack.pop();
 
-                const newNode = createVDOM(processedTpl);
+                let newNode = createVDOM(processedTpl);
                 node.parentElement.insertBefore(newNode, node);
             }
 
@@ -179,12 +275,12 @@ const renderTemplate = (ctx) => {
                 nodeRemoved: true,
             }
         } catch (e) {
-            console.warn(`[${TPL_FOR}] could not parse: ${namedItem.value}`);
+            console.warn(`[${TPL_FOR}] could not parse: ${tplForAttrib.value}`);
         }
         return {};
     }
 
-    const processNodes = (node) => {
+    const preProcessNodes = (node) => {
         let ret = {}
         if (!node) {
             return ret;
@@ -204,7 +300,31 @@ const renderTemplate = (ctx) => {
         while (childIdx < node.children.length) {
             const child = node.children[childIdx];
             
-            const result = processNodes(child);
+            const result = preProcessNodes(child);
+            if (!result.nodeRemoved) {
+                childIdx++;
+            }
+        }
+
+        return ret;
+    }
+
+    const postProcessNodes = (node) => {
+        let ret = {}
+        if (!node) {
+            return ret;
+        }
+
+        ret = handleTplModel(node);
+        if (ret.nodeRemoved) {
+            return ret;
+        }
+
+        let childIdx = 0;
+        while (childIdx < node.children.length) {
+            const child = node.children[childIdx];
+            
+            const result = postProcessNodes(child);
             if (!result.nodeRemoved) {
                 childIdx++;
             }
@@ -320,7 +440,7 @@ const renderTemplate = (ctx) => {
 
     let vdom = createVDOM(evalDoubleCurlyBraces(ctx.template));
     removeInvisibility(vdom);
-    processNodes(vdom);
+    preProcessNodes(vdom);
     
     if (ctx.fullRender) {
         ctx.rootNode.outerHTML = vdom.outerHTML;
@@ -329,6 +449,7 @@ const renderTemplate = (ctx) => {
     } else {
         diffAndUpdate(ctx.rootNode, vdom);
     }
+    postProcessNodes(ctx.rootNode);
 }
 
 // === utilities ===

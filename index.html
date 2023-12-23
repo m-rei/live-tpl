@@ -10,6 +10,7 @@
     </head>
     <body>
         <div id="app" class="invisible">
+            <input type="text" tpl-model="str">
             <p>text rendering: {{str}}</p>
 
             <button onclick="toggleBool()">toggle bools</button>
@@ -37,6 +38,28 @@
                     {{x}}
                 </li>
             </ul>
+
+            <hr>
+ 
+            <div tpl-for="arr1; x">
+                <div tpl-for="x.arr2; y">
+                    <input type="number" tpl-model="y">
+                </div>
+                
+                <div tpl-for="arr3; z">
+                    <input tpl-model="z">
+                </div>
+            </div>
+
+            <div tpl-for="arr1; x">
+                <div tpl-for="x.arr2; y">
+                    <p>{{y}}</p>
+                </div>
+                
+                <div tpl-for="arr3; z">
+                    <p>{{z}}</p>
+                </div>
+            </div>
         </div>
 
         <script src="script.js"></script>

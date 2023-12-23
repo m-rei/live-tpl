@@ -3,10 +3,11 @@ Minimal, in-place, live html templating engine
 
 ## Keywords
 
-Following two keywords can be used for templating:
+The following keywords can be used for templating:
 
 - tpl-if
 - tpl-for
+- tpl-model
 
 ## Getting started
 
@@ -30,6 +31,7 @@ Make sure the template container is invisible; use the exact class name given be
 It will be made visible once the initial rendering has occurred during initialization.
 
     <div id="app" class="invisible">
+        <input type="text" tpl-model="str">
         <p>text rendering: {{str}}</p>
 
         <button onclick="toggleBools()">toggle bools</button>

@@ -9,6 +9,11 @@ let data = {
             [3, 6, 9],
         ]
     },
+	arr1: [
+		{arr2: [1, 2]},
+		{arr2: [10, 20]},
+	],
+	arr3: [0],
 }
 
 const tplCtx = initTemplate('#app', data);
