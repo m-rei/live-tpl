@@ -196,13 +196,14 @@ const renderTemplate = (ctx) => {
         }
     }
 
-    const handleTplModel = (node) => {
+    const handleTplModel = (node, referencedTplModels) => {
         const namedItem = node.attributes.getNamedItem(TPL_MODEL);
         if (!namedItem) {
             return {};
         }
         try {
             const fullVarName = namedItem.value;
+            referencedTplModels.add(fullVarName);
             node.attributes.removeNamedItem(TPL_MODEL);
             let changeListener = ctx.changeListeners.get(fullVarName);
             if (!changeListener) {
@@ -309,13 +310,13 @@ const renderTemplate = (ctx) => {
         return ret;
     }
 
-    const postProcessNodes = (node) => {
+    const postProcessNodes = (node, referencedTplModels) => {
         let ret = {}
         if (!node) {
             return ret;
         }
 
-        ret = handleTplModel(node);
+        ret = handleTplModel(node, referencedTplModels);
         if (ret.nodeRemoved) {
             return ret;
         }
@@ -324,13 +325,23 @@ const renderTemplate = (ctx) => {
         while (childIdx < node.children.length) {
             const child = node.children[childIdx];
             
-            const result = postProcessNodes(child);
+            const result = postProcessNodes(child, referencedTplModels);
             if (!result.nodeRemoved) {
                 childIdx++;
             }
         }
 
         return ret;
+    }
+
+    const removeUnreferencedChangeListenersFromCtx = (referencedTplModels) => {
+        const referencedTplModelsArr = Array.from(referencedTplModels);
+        const changeListeners = Array.from(ctx.changeListeners.keys());
+        for (const changeListener of changeListeners) {
+            if (!referencedTplModelsArr.includes(changeListener)) {
+                ctx.changeListeners.delete(changeListener);
+            }
+        }
     }
 
     const nodeType = (node) => {
@@ -449,7 +460,9 @@ const renderTemplate = (ctx) => {
     } else {
         diffAndUpdate(ctx.rootNode, vdom);
     }
-    postProcessNodes(ctx.rootNode);
+    let referencedTplModels = new Set();
+    postProcessNodes(ctx.rootNode, referencedTplModels);
+    removeUnreferencedChangeListenersFromCtx(referencedTplModels); 
 }
 
 // === utilities ===
