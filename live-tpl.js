@@ -5,7 +5,7 @@ const initTemplate = (rootNodeSelector, data, invisibilityCSSClass = null) => {
     ctx.rootNode = document.querySelector(rootNodeSelector);
     ctx.template = ctx.rootNode.outerHTML;
     ctx.data = data;
-    ctx.localDataStack = [];
+    ctx.localData = {};
     ctx.fullRender = true;
     ctx.invisibilityCSSClass = invisibilityCSSClass ;
     ctx.changeListeners = new Map();
@@ -64,10 +64,7 @@ const renderTemplate = (ctx) => {
             let varRef = varRefs[i];
             let varTokens = varRef[0].split('.');
 
-            let val = undefined;
-            for (let j = ctx.localDataStack.length-1; j >= 0 && val?.ret === undefined; j--) {
-                val = tryToResolveVarRef(ctx.localDataStack[j], varTokens);
-            }
+            let val = tryToResolveVarRef(ctx.localData, varTokens);
             if (val?.ret === undefined) {
                 val = tryToResolveVarRef(ctx.data, varTokens);
             }
@@ -170,7 +167,7 @@ const renderTemplate = (ctx) => {
     const tplModelChangeListener = (fullVarName) => {
         return (e) => {
             const newVal = e?.currentTarget?.value;
-            if (!newVal) {
+            if (newVal == undefined) {
                 return;
             }
             let base = ctx.data;
@@ -268,11 +265,11 @@ const renderTemplate = (ctx) => {
 
             for (let idx = 0; idx < forArr.length; idx++) {
                 let forVal = forArr[idx];
-                let stack = {};
-                stack[forVar] = forVal;
-                ctx.localDataStack.push(stack);
+                const localData = {};
+                localData[forVar] = forVal;
+                ctx.localData = localData;
                 const processedTpl = evalTplDirectives(evalDoubleCurlyBraces(tpl), currentArrName, forVar, idx);
-                ctx.localDataStack.pop();
+                ctx.localData = {};
 
                 let newNode = createVDOM(processedTpl);
                 node.parentElement.insertBefore(newNode, node);
