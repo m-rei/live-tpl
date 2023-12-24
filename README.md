@@ -30,11 +30,11 @@ Setup a central data object:
         },
     }
 
-Write your template!
-Make sure the template container is invisible; use the exact class name given below in the example.
-It will be made visible once the initial rendering has occurred during initialization.
+Write your template!  
+Make your template container invisible, pass the invisibility css class to the initTemplate() method,
+to remove it after the first render.
 
-    <div id="app" class="invisible">
+    <div id="app" class="invis">
         <input type="text" tpl-model="str">
         <p>text rendering: {{str}}</p>
 
@@ -64,7 +64,7 @@ It will be made visible once the initial rendering has occurred during initializ
 
 Initialize the template context as follows, providing your template container selector and your data:
 
-    const tplCtx = initTemplate('#app', data);
+    const tplCtx = initTemplate('#app', data, 'invis');
 
 Once your are finished mutating your data, rerender as follows:
 

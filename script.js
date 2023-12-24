@@ -16,7 +16,7 @@ let data = {
 	arr3: [0],
 }
 
-const tplCtx = initTemplate('#app', data);
+const tplCtx = initTemplate('#app', data, 'invis');
 
 function toggleBool() {
     data.bool = !data.bool;

@@ -1,4 +1,4 @@
-const initTemplate = (rootNodeSelector, data) => {
+const initTemplate = (rootNodeSelector, data, invisibilityCSSClass = null) => {
     let ctx = {};
 
     ctx.rootNodeSelector = rootNodeSelector;
@@ -7,6 +7,7 @@ const initTemplate = (rootNodeSelector, data) => {
     ctx.data = data;
     ctx.localDataStack = [];
     ctx.fullRender = true;
+    ctx.invisibilityCSSClass = invisibilityCSSClass ;
     ctx.changeListeners = new Map();
     renderTemplate(ctx);
 
@@ -17,6 +18,12 @@ const renderTemplate = (ctx) => {
     const TPL_FOR = 'tpl-for';
     const TPL_IF = 'tpl-if';
     const TPL_MODEL = 'tpl-model';
+
+    const createVDOM = (source) => {
+        const node = document.createElement('template');
+        node.innerHTML = source;
+        return node.content.children[0];
+    }
 
     const tryToResolveVarRef = (varContainer, tokens) => {
         let ret = varContainer;
@@ -450,7 +457,12 @@ const renderTemplate = (ctx) => {
     }
 
     let vdom = createVDOM(evalDoubleCurlyBraces(ctx.template));
-    removeInvisibility(vdom);
+    if (ctx.invisibilityCSSClass) {
+        vdom.classList.remove(ctx.invisibilityCSSClass);
+        if (vdom.classList.length == 0) {
+            vdom.attributes.removeNamedItem('class');
+        }
+    }
     preProcessNodes(vdom);
     
     if (ctx.fullRender) {
@@ -463,19 +475,4 @@ const renderTemplate = (ctx) => {
     let referencedTplModels = new Set();
     postProcessNodes(ctx.rootNode, referencedTplModels);
     removeUnreferencedChangeListenersFromCtx(referencedTplModels); 
-}
-
-// === utilities ===
-
-const createVDOM = (source) => {
-    const node = document.createElement('template');
-    node.innerHTML = source;
-    return node.content.children[0];
-}
-
-const removeInvisibility = (node) => {
-    node.classList.remove('invisible');
-    if (node.classList.length == 0) {
-        node.attributes.removeNamedItem('class')
-    }
 }
