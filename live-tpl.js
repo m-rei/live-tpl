@@ -98,6 +98,9 @@ const renderTemplate = (ctx) => {
             }
             const processedExpr = resolveVarRefs(matchedExpr);
             try {
+                if ("i" === processedExpr) {
+                    throw Exception();
+                }
                 let evaledExpr = eval('(' + processedExpr + ')');
                 if (typeof evaledExpr == 'object') {
                     evaledExpr = JSON.stringify(evaledExpr);
