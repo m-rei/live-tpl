@@ -1,5 +1,9 @@
 # live-tpl
-Minimal, in-place, live html templating engine
+Minimal & natural html templating engine.
+
+There is no need for an intermediate step of transpiling a project, as its the case with the more fully fleshed frameworks like angular/react etc.
+
+Your html file is your template and your final product: it is processed and updated in place & live!
 
 ## Keywords
 
