@@ -15,6 +15,10 @@ The following keywords can be used for templating:
 
 ## Getting started
 
+Add the following <script> tag inside \<head>:
+
+    <script src="https://m-rei.github.io/assets/js/live-tpl.min.js"></script>
+
 Setup a central data object:
 
     let data = {
