@@ -31,8 +31,9 @@ Setup a central data object:
     }
 
 Write your template!  
-Make your template container invisible, pass the invisibility css class to the initTemplate() method,
-to remove it after the first render.
+Make the template container invisible, so that the customer does not see the unprocessed template.  
+Pass the invisibility class name to the *initTemplate()* function.  
+If it receives a class name, it will remove the class, once the first render is complete!
 
     <div id="app" class="invis">
         <input type="text" tpl-model="str">
