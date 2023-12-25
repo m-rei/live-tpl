@@ -139,8 +139,11 @@ const renderTemplate = (ctx) => {
         const matches = [...txt.matchAll(attribRE)];
         for (let i = matches.length-1; i >= 0; i--) {
             const match = matches[i];
-            const matchedExpr = match[2].trim();
-            const processedExpr = '##' + btoa(resolveVarRefs(matchedExpr))
+            let matchedExpr = match[2];
+            let processedExpr = matchedExpr.startsWith('##')
+                ? atob(matchedExpr.substring(2))
+                : matchedExpr;
+            processedExpr = '##' + btoa(resolveVarRefs(processedExpr));
             txt = txt.slice(0, match.index + 1 + match[1].length + 1 + 2) + 
                 processedExpr + 
                 txt.slice(match.index + 1 + match[1].length + 1 + 2 + matchedExpr.length);
