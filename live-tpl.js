@@ -31,22 +31,25 @@ const renderTemplate = (ctx) => {
         let name = '';
         while (idx < tokens.length) {
             let nextToken = tokens[idx];
-            let arrIdx = undefined;
+            let arrIndices = [];
             if (nextToken.includes('[')) {
                 const tokenParts = nextToken.split('[');
                 nextToken = tokenParts[0];
-                indexTxt = tokenParts[1].substring(0, tokenParts[1].length - 1);
-                const indexResolved = parseInt(resolveVarRefs(indexTxt));
-                if (indexResolved != NaN) {
-                    arrIdx = indexResolved;
+                for (let i = 1; i < tokenParts.length; i++) {
+                    indexTxt = tokenParts[i].substring(0, tokenParts[i].length - 1);
+                    const indexResolved = parseInt(resolveVarRefs(indexTxt));
+                    if (indexResolved != NaN) {
+                        arrIndices.push(indexResolved);
+                    }
                 }
             }
             if (['string','number','boolean','array','object'].includes(typeof ret[nextToken])) {
                 ret = ret[nextToken];
                 name += `.${nextToken}`;
-                if (arrIdx != undefined) {
-                    ret = ret[arrIdx];
-                    name += `[${arrIdx}]`;
+                for (let i = 0; i < arrIndices.length; i++) {
+                    const ai = arrIndices[i];
+                    ret = ret[ai];
+                    name += `[${ai}]`;
                 }
                 idx++
             } else {
