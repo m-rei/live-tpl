@@ -1,6 +1,7 @@
 let data = {
     'bool': false,
     'str': 'Hello There',
+    'textStr': 'text',
     'obj': {
         name: 'test',
         arr: [1, 2, 3],

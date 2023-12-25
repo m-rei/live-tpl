@@ -10,7 +10,7 @@
     </head>
     <body>
         <div id="app" class="invis">
-            <input type="text" tpl-model="str">
+            <input [type]="textStr" tpl-model="str">
             <p>text rendering: {{str}}</p>
 
             <button onclick="toggleBool()">toggle bools</button>

@@ -134,6 +134,20 @@ const renderTemplate = (ctx) => {
         return txt;
     }
 
+    const evalSquareBracketAttributes = (txt) => {
+        const attribRE = /\[([^\]]*)\]="([^"]*)"/g;
+        const matches = [...txt.matchAll(attribRE)];
+        for (let i = matches.length-1; i >= 0; i--) {
+            const match = matches[i];
+            const matchedExpr = match[2].trim();
+            const processedExpr = '##' + btoa(resolveVarRefs(matchedExpr))
+            txt = txt.slice(0, match.index + 1 + match[1].length + 1 + 2) + 
+                processedExpr + 
+                txt.slice(match.index + 1 + match[1].length + 1 + 2 + matchedExpr.length);
+        }
+        return txt;
+    }
+
     const evalTplDirectivesAndAttribs = (txt, parentLoopArrName, parentLoopVar, parentLoopIdx) => {
         const tplForRE = new RegExp(`${TPL_FOR}="([^;]*);([^"]*)`, 'g');
         const tplForArrReferencesParentLoopVarRE = new RegExp(`^${parentLoopVar}(\\.|\\[)`, 'g');
@@ -168,16 +182,7 @@ const renderTemplate = (ctx) => {
             txt = txt.slice(0, match.index + 2 + TPL_IF.length) + processedExpr + txt.slice(match.index + 2 + TPL_IF.length + matchedExpr.length);
         }
 
-        const attribRE = /\[([^\]]*)\]="([^"]*)"/g;
-        matches = [...txt.matchAll(attribRE)];
-        for (let i = matches.length-1; i >= 0; i--) {
-            const match = matches[i];
-            const matchedExpr = match[2].trim();
-            const processedExpr = '##' + btoa(resolveVarRefs(matchedExpr))
-            txt = txt.slice(0, match.index + 1 + match[1].length + 1 + 2) + 
-                processedExpr + 
-                txt.slice(match.index + 1 + match[1].length + 1 + 2 + matchedExpr.length);
-        }
+        txt = evalSquareBracketAttributes(txt);
 
         const tplModelRE = new RegExp(`${TPL_MODEL}="([^"]*)`, 'g');
         matches = [...txt.matchAll(tplModelRE)];
@@ -514,7 +519,7 @@ const renderTemplate = (ctx) => {
         })
     }
 
-    let vdom = createVDOM(evalDoubleCurlyBraces(ctx.template));
+    let vdom = createVDOM(evalSquareBracketAttributes(evalDoubleCurlyBraces(ctx.template)));
     if (ctx.invisibilityCSSClass) {
         vdom.classList.remove(ctx.invisibilityCSSClass);
         if (vdom.classList.length == 0) {

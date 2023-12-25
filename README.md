@@ -15,6 +15,8 @@ The following directives (html attributes) can be used for templating:
 
 You can use double-curly braces anywhere in the container!
 
+Html tag attributes can be templated with square brackets!
+
 ## Getting started
 
 Add the following <script> tag inside \<head>:
@@ -26,6 +28,7 @@ Setup a central data object:
     let data = {
         'bool': false,
         'str': 'Hello There',
+        'textStr': 'text',
         'obj': {
             name: 'test',
             arr: [1, 2, 3],
@@ -42,7 +45,7 @@ Pass the invisibility class name to the *initTemplate()* function.
 If it receives a class name, it will remove the class, once the first render is complete!
 
     <div id="app" class="invis">
-        <input type="text" tpl-model="str">
+        <input [type]="textStr" tpl-model="str">
         <p>text rendering: {{str}}</p>
 
         <button onclick="toggleBools()">toggle bools</button>
