@@ -96,7 +96,7 @@ Using the given data...
             [11, 22, 33],
             [77, 88, 99],
         ],
-        nestedObj: {
+        obj: {
             someIdx: 1,
         }
     }
@@ -119,6 +119,6 @@ Using the given data...
 
 ... invalid example:
 
-    // [nestedObj.someIndex] will not be resolved!
-    <div tpl-for="arr1[nestedObj.someIndex]; i">
+    // [obj.someIndex] will not be resolved!
+    <div tpl-for="arr1[obj.someIndex]; i">
     </div>
