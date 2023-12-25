@@ -28,10 +28,26 @@ const renderTemplate = (ctx) => {
     const tryToResolveVarRef = (varContainer, tokens) => {
         let ret = varContainer;
         let idx = 0;
+        let name = '';
         while (idx < tokens.length) {
-            const nextToken = tokens[idx];
+            let nextToken = tokens[idx];
+            let arrIdx = undefined;
+            if (nextToken.includes('[')) {
+                const tokenParts = nextToken.split('[');
+                nextToken = tokenParts[0];
+                indexTxt = tokenParts[1].substring(0, tokenParts[1].length - 1);
+                const indexResolved = parseInt(resolveVarRefs(indexTxt));
+                if (indexResolved != NaN) {
+                    arrIdx = indexResolved;
+                }
+            }
             if (['string','number','boolean','array','object'].includes(typeof ret[nextToken])) {
                 ret = ret[nextToken];
+                name += `.${nextToken}`;
+                if (arrIdx != undefined) {
+                    ret = ret[arrIdx];
+                    name += `[${arrIdx}]`;
+                }
                 idx++
             } else {
                 break;
@@ -43,6 +59,7 @@ const renderTemplate = (ctx) => {
         return {
             ret: ret,
             tokens: idx,
+            name: name.substring(1),
         }
     }
 
@@ -58,7 +75,7 @@ const renderTemplate = (ctx) => {
                 txtStringsReplacedWithWhiteSpaces.substring(match.index + match[0].length);
         }
 
-        const re = /[a-zA-Z_$][a-zA-Z$0-9_.-]*/g;
+        const re = /[a-zA-Z_$]([a-zA-Z$0-9_.-]*(\[[a-zA-Z$0-9_.-]*\])?(\.)?)*/g;
         const varRefs = [...txtStringsReplacedWithWhiteSpaces.matchAll(re)];
         for (let i = 0; i < varRefs.length; i++) {
             let varRef = varRefs[i];
@@ -120,6 +137,12 @@ const renderTemplate = (ctx) => {
         for (let i = matches.length-1; i >= 0; i--) {
             const match = matches[i];
             let matchedExpr = match[1];
+            if (matchedExpr.includes('[')) {
+                let ret = tryToResolveVarRef(ctx.data, matchedExpr.split('.'));
+                if (ret?.ret != undefined) {
+                    matchedExpr = ret?.name;
+                }
+            }
             const referencesParentLoopVar = tplForArrReferencesParentLoopVarRE.test(matchedExpr.trim());
             const arrNameToInsert = referencesParentLoopVar
                 ? ';##' + btoa(`${parentLoopArrName}[${parentLoopIdx}].${matchedExpr.split('.').filter((_,idx) => idx > 0).join('.')}`)
@@ -164,7 +187,13 @@ const renderTemplate = (ctx) => {
         if ('boolean' === typeof oldType) {
             return strValue.toLowerCase() == 'true' || strValue == '1' || strValue == 't' || strValue === 'y';
         }
-        return strValue;
+        return JSON.stringify(strValue);
+    }
+
+    const evalProxy = src => {
+        return (function() {
+            return eval(src);
+        });
     }
 
     const tplModelChangeListener = (fullVarName) => {
@@ -173,32 +202,12 @@ const renderTemplate = (ctx) => {
             if (newVal == undefined) {
                 return;
             }
-            let base = ctx.data;
-            const tokens = fullVarName.split('.');
-            let i = 0;
-            while (i < tokens.length) {
-                const currentToken = tokens[i];
-                if (currentToken.includes('[')) {
-                    const currentTokenParts = currentToken.split('[');
-                    base = base[currentTokenParts[0]];
-                    const arrIdx = parseInt(currentTokenParts[1].substring(0, currentTokenParts[1].length - 1));
-                    if (arrIdx == NaN) {
-                        return;
-                    }
-                    if (i == tokens.length - 1) {
-                        base[arrIdx] = convert(newVal, base[arrIdx]);
-                        break;
-                    }
-                    base = base[arrIdx];
-                } else {
-                    if (i == tokens.length -1) {
-                        base[currentToken] = convert(newVal, base[currentToken]);
-                        break;
-                    }
-                    base = base[currentToken];
-                }
-                i++;
+            
+            let oldVal = evalProxy (`this.${fullVarName}`).bind(ctx.data)();
+            if (oldVal == undefined) {
+                return;
             }
+            evalProxy (`this.${fullVarName}=${convert(newVal, oldVal)}`).bind(ctx.data)();
             renderTemplate(ctx);
         }
     }
@@ -219,7 +228,7 @@ const renderTemplate = (ctx) => {
             }
             node.removeEventListener('change', changeListener);
             node.addEventListener('change', changeListener);
-            node.value = eval(resolveVarRefs(fullVarName));
+            node.value = evalProxy (`this.${fullVarName}`).bind(ctx.data)();
         } catch (e) {
             console.warn(`[${TPL_MODEL}] could not parse: ${namedItem.value}`);
         }
