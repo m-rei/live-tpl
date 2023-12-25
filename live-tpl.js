@@ -263,8 +263,10 @@ const renderTemplate = (ctx) => {
             return {};
         }
         try {
-            const val = resolveVarRefs(atob(namedItem.value.substring(2)));
-            const evalResult = eval(val);
+            const val = namedItem.value.startsWith('##')
+                ? atob(namedItem.value.substring(2))
+                : namedItem.value;
+            const evalResult = eval(resolveVarRefs(val));
             node.attributes.removeNamedItem(TPL_IF);
             if (evalResult == false) {
                 node.parentNode.removeChild(node);
