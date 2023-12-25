@@ -1,4 +1,4 @@
-const initTemplate = (rootNodeSelector, data, invisibilityCSSClass = null) => {
+const initTemplate = (rootNodeSelector, data, invisibilityCSSClass = null, useWarnings = false) => {
     let ctx = {};
 
     ctx.rootNodeSelector = rootNodeSelector;
@@ -9,6 +9,7 @@ const initTemplate = (rootNodeSelector, data, invisibilityCSSClass = null) => {
     ctx.fullRender = true;
     ctx.invisibilityCSSClass = invisibilityCSSClass ;
     ctx.changeListeners = new Map();
+    ctx.useWarnings = useWarnings;
     renderTemplate(ctx);
 
     return ctx;
@@ -133,10 +134,10 @@ const renderTemplate = (ctx) => {
         return txt;
     }
 
-    const evalTplDirectives = (txt, parentLoopArrName, parentLoopVar, parentLoopIdx) => {
+    const evalTplDirectivesAndAttribs = (txt, parentLoopArrName, parentLoopVar, parentLoopIdx) => {
         const tplForRE = new RegExp(`${TPL_FOR}="([^;]*);([^"]*)`, 'g');
         const tplForArrReferencesParentLoopVarRE = new RegExp(`^${parentLoopVar}(\\.|\\[)`, 'g');
-        const matches = [...txt.matchAll(tplForRE)];
+        let matches = [...txt.matchAll(tplForRE)];
         for (let i = matches.length-1; i >= 0; i--) {
             const match = matches[i];
             let matchedExpr = match[1];
@@ -159,18 +160,29 @@ const renderTemplate = (ctx) => {
         } 
 
         const tplIfRE = new RegExp(`${TPL_IF}="([^"]*)`, 'g'); 
-        const matches2 = [...txt.matchAll(tplIfRE)];
-        for (let i = matches2.length-1; i >= 0; i--) {
-            const match = matches2[i];
+        matches = [...txt.matchAll(tplIfRE)];
+        for (let i = matches.length-1; i >= 0; i--) {
+            const match = matches[i];
             let matchedExpr = match[1];
             const processedExpr = '##' + btoa(resolveVarRefs(matchedExpr));
             txt = txt.slice(0, match.index + 2 + TPL_IF.length) + processedExpr + txt.slice(match.index + 2 + TPL_IF.length + matchedExpr.length);
         }
 
+        const attribRE = /\[([^\]]*)\]="([^"]*)"/g;
+        matches = [...txt.matchAll(attribRE)];
+        for (let i = matches.length-1; i >= 0; i--) {
+            const match = matches[i];
+            const matchedExpr = match[2].trim();
+            const processedExpr = '##' + btoa(resolveVarRefs(matchedExpr))
+            txt = txt.slice(0, match.index + 1 + match[1].length + 1 + 2) + 
+                processedExpr + 
+                txt.slice(match.index + 1 + match[1].length + 1 + 2 + matchedExpr.length);
+        }
+
         const tplModelRE = new RegExp(`${TPL_MODEL}="([^"]*)`, 'g');
-        const matches3 = [...txt.matchAll(tplModelRE)];
-        for (let i = matches3.length-1; i >= 0; i--) {
-            const match = matches3[i];
+        matches = [...txt.matchAll(tplModelRE)];
+        for (let i = matches.length-1; i >= 0; i--) {
+            const match = matches[i];
             let matchedExpr = match[1];
             if (matchedExpr.trim() == parentLoopVar) {
                 const arrNameToInsert = `${parentLoopArrName}[${parentLoopIdx}]`;
@@ -233,7 +245,9 @@ const renderTemplate = (ctx) => {
             node.addEventListener('change', changeListener);
             node.value = evalProxy (`this.${fullVarName}`).bind(ctx.data)();
         } catch (e) {
-            console.warn(`[${TPL_MODEL}] could not parse: ${namedItem.value}`);
+            if (ctx.useWarnings) {
+                console.warn(`[${TPL_MODEL}] could not parse: ${namedItem.value}`);
+            }
         }
         return {}
     }
@@ -254,10 +268,38 @@ const renderTemplate = (ctx) => {
                 }
             }
         } catch (e) {
-            console.warn(`[${TPL_IF}] could not parse: ${namedItem.value}`);
+            if (ctx.useWarnings) {
+                console.warn(`[${TPL_IF}] could not parse: ${namedItem.value}`);
+            }
         }
         return {};
     } 
+
+    const handleSquareBracketAttributes = (node) => {
+        for (let i = node.attributes.length-1; i >= 0; i--) {
+            const attrib = node.attributes[i];
+            const startsEndsWithBrackets = attrib.name.startsWith('[') && attrib.name.endsWith(']');
+            if (!startsEndsWithBrackets) {
+                continue;
+            }
+            const attribName = attrib.name.substring(1, attrib.name.length-1);
+            node.attributes.removeNamedItem(attrib.name);
+            try {
+                const val = resolveVarRefs(atob(attrib.value.substring(2)));
+                if (val === 'i') {
+                    throw Exception();
+                }
+                const evalResult = eval(val);
+                let attribToUpdate = node.attributes[attribName] ?? document.createAttribute(attribName);
+                attribToUpdate.value = evalResult;
+                node.attributes.setNamedItem(attribToUpdate);
+            } catch (e) {
+                if (ctx.useWarnings) {
+                    console.warn(`Square bracket attribute processing for ${attrib.name} failed`);
+                }
+            }
+        }
+    }
 
     const handleTplFor = (node) => {
         const tplForAttrib = node.attributes.getNamedItem(TPL_FOR);
@@ -283,7 +325,7 @@ const renderTemplate = (ctx) => {
                 const localData = {};
                 localData[forVar] = forVal;
                 ctx.localData = localData;
-                const processedTpl = evalTplDirectives(evalDoubleCurlyBraces(tpl), currentArrName, forVar, idx);
+                const processedTpl = evalTplDirectivesAndAttribs(evalDoubleCurlyBraces(tpl), currentArrName, forVar, idx);
                 ctx.localData = {};
 
                 let newNode = createVDOM(processedTpl);
@@ -295,7 +337,9 @@ const renderTemplate = (ctx) => {
                 nodeRemoved: true,
             }
         } catch (e) {
-            console.warn(`[${TPL_FOR}] could not parse: ${tplForAttrib.value}`);
+            if (ctx.useWarnings) {
+                console.warn(`[${TPL_FOR}] could not parse: ${tplForAttrib.value}`);
+            }
         }
         return {};
     }
@@ -315,6 +359,8 @@ const renderTemplate = (ctx) => {
         if (ret.nodeRemoved) {
             return ret;
         }
+
+        handleSquareBracketAttributes(node);
 
         let childIdx = 0;
         while (childIdx < node.children.length) {
