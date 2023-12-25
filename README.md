@@ -82,7 +82,8 @@ Once your are finished mutating your data, rerender as follows:
 
 ## Limitations
 
-In the tpl-for directive, when the array reference itself is referencing an array, the index must be either directly a number or
+In the tpl-for directive, when the array reference itself is referencing an array,  
+the index must either be a number or a parent loop variable reference!
 
 Using the given data...
 
@@ -99,14 +100,14 @@ Using the given data...
 
 ... valid examples:
 
-    // example 1: arr2[0] is using direct number, 0, as index
+    // example 1: arr2[0] is using number, 0, as index
     <div tpl-for="arr1; i">
         <div tpl-for="arr2[0]; j"
             {{j}}
         </div>
     </div>
 
-    // example 2: arr2[i] is using loop var of parent as index
+    // example 2: arr2[i] is using loop variable of parent, i, as index
     <div tpl-for="arr1; i">
         <div tpl-for="arr2[i]; j"
             {{j}}
@@ -115,5 +116,6 @@ Using the given data...
 
 ... invalid example:
 
+    // [nestedObj.someIndex] will not be resolved!
     <div tpl-for="arr1[nestedObj.someIndex]; i">
     </div>
