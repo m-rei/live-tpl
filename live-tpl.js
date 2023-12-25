@@ -163,7 +163,7 @@ const renderTemplate = (ctx) => {
         for (let i = matches2.length-1; i >= 0; i--) {
             const match = matches2[i];
             let matchedExpr = match[1];
-            const processedExpr = resolveVarRefs(matchedExpr);
+            const processedExpr = '##' + btoa(resolveVarRefs(matchedExpr));
             txt = txt.slice(0, match.index + 2 + TPL_IF.length) + processedExpr + txt.slice(match.index + 2 + TPL_IF.length + matchedExpr.length);
         }
 
@@ -244,7 +244,7 @@ const renderTemplate = (ctx) => {
             return {};
         }
         try {
-            const val = resolveVarRefs(namedItem.value);
+            const val = resolveVarRefs(atob(namedItem.value.substring(2)));
             const evalResult = eval(val);
             node.attributes.removeNamedItem(TPL_IF);
             if (evalResult == false) {
