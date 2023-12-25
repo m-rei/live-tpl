@@ -5,13 +5,15 @@ There is no need for an intermediate step of transpiling a project, as its the c
 
 Your html file is your template and your final product: it is processed and updated in place & live!
 
-## Keywords
+## Directives
 
-The following keywords can be used for templating:
+The following directives (html attributes) can be used for templating:
 
 - tpl-if
 - tpl-for
 - tpl-model
+
+You can use double-curly braces anywhere in the container!
 
 ## Getting started
 
@@ -77,3 +79,41 @@ Once your are finished mutating your data, rerender as follows:
         data.bool = !data.bool;
         renderTemplate(tplCtx);
     }
+
+## Limitations
+
+In the tpl-for directive, when the array reference itself is referencing an array, the index must be either directly a number or
+
+Using the given data...
+
+    let data = {
+        arr1: [0, 1],
+        arr2: [
+            [11, 22, 33],
+            [77, 88, 99],
+        ],
+        nestedObj: {
+            someIdx: 1,
+        }
+    }
+
+... valid examples:
+
+    // example 1: arr2[0] is using direct number, 0, as index
+    <div tpl-for="arr1; i">
+        <div tpl-for="arr2[0]; j"
+            {{j}}
+        </div>
+    </div>
+
+    // example 2: arr2[i] is using loop var of parent as index
+    <div tpl-for="arr1; i">
+        <div tpl-for="arr2[i]; j"
+            {{j}}
+        </div>
+    </div>
+
+... invalid example:
+
+    <div tpl-for="arr1[nestedObj.someIndex]; i">
+    </div>
